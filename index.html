@@ -20,7 +20,7 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            font-family: "Microsoft JhengHei", sans-serif; 
             display: flex; 
             flex-direction: column; 
             align-items: center; 
@@ -33,11 +33,11 @@
             user-select: none;
         }
 
-        h1 { font-size: 1.4rem; color: #333; margin-bottom: 8px; font-weight: 700; letter-spacing: -0.5px; }
+        h1 { font-size: 1.2rem; color: #333; margin-bottom: 5px; }
         
         #connection-panel { 
             background: #fff; 
-            padding: 10px 14px; 
+            padding: 8px 12px; 
             border-radius: 8px; 
             margin-bottom: 12px; 
             box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
@@ -45,24 +45,24 @@
             width: 100%;
             max-width: 400px;
         }
-        #status { font-size: 0.9rem; margin-bottom: 8px; font-weight: bold; color: #cc0000; line-height: 1.3; }
-        input, button { padding: 6px 12px; font-size: 0.85rem; border-radius: 4px; border: 1px solid #ccc; margin: 2px; }
-        button { background: #0066cc; color: white; cursor: pointer; border: none; font-weight: bold; transition: background 0.2s; }
-        button:hover { background: #0052a3; }
+        #status { font-size: 0.9rem; margin-bottom: 6px; font-weight: bold; color: #0066cc; }
+        input, button { padding: 6px 10px; font-size: 0.85rem; border-radius: 4px; border: 1px solid #ccc; margin: 2px; }
+        button { background: #0066cc; color: white; cursor: pointer; border: none; font-weight: bold; }
         
-        /* 棋盤大容器 */
+        /* 🌟 國際象棋大容器：必須是完美的正方形 1:1 比例 */
         .chessboard-container { 
             position: relative; 
-            border: 4px solid #333; 
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2); 
+            border: 4px solid #4a3b2c; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3); 
             border-radius: 4px;
-            width: 96vw; 
-            max-width: 400px;
-            height: 96vw; 
-            max-height: 400px;
+            width: 94vw; 
+            max-width: 390px;
+            height: 94vw; 
+            max-height: 390px;
+            background-color: #769656;
         }
 
-        /* 8x8 格線黑白網格 */
+        /* 🌟 8x8 底色網格層：與容器 100% 貼合，絕無 Padding 偏差 */
         .board-lines { 
             display: grid; 
             grid-template-columns: repeat(8, 1fr); 
@@ -74,43 +74,46 @@
             pointer-events: none;
         }
         .cell { width: 100%; height: 100%; }
-        /* 國際象棋經典淺深格色 */
+        /* 經典深淺木格色 */
         .cell.light { background-color: #eeeed2; }
         .cell.dark { background-color: #769656; }
         
-        /* 棋子與點擊事件圖層 */
+        /* 🌟 8x8 棋子事件圖層：結構必須與底色網格 100% 完全重疊 */
         .pieces-layer { 
             position: absolute; 
             top: 0; left: 0;
-            width: 100%; height: 100%;
+            width: 100%; 
+            height: 100%;
             display: grid; 
             grid-template-columns: repeat(8, 1fr); 
             grid-template-rows: repeat(8, 1fr); 
             z-index: 10;
         }
         
+        /* 每一格棋位：置中對齊 */
         .intersection { 
             width: 100%; height: 100%; 
             display: flex; justify-content: center; align-items: center; 
             cursor: pointer; position: relative; 
         }
         
-        /* 棋子外觀：使用精美的 Unicode 國際象棋符號 */
+        /* 棋子外觀：放大並置中 */
         .piece { 
-            font-size: 2.2rem; 
+            font-size: 2.3rem; 
             display: flex; justify-content: center; align-items: center; 
             z-index: 20; 
             pointer-events: none;
-            transition: transform 0.1s;
+            user-select: none;
         }
-        /* 白色棋子加深點陰影方便辨識 */
-        .piece.white { color: #ffffff; filter: drop-shadow(1px 1px 2px #000); }
-        .piece.black { color: #000000; filter: drop-shadow(0px 0px 1px #fff); }
+        /* 白色棋子加深立體陰影 */
+        .piece.white { color: #ffffff; filter: drop-shadow(1px 1px 2px #000) drop-shadow(0px 0px 1px #555); }
+        .piece.black { color: #000000; filter: drop-shadow(1px 1px 1px rgba(255,255,255,0.6)); }
         
+        /* 選中格與可行路徑提示 */
         .intersection.selected { background-color: rgba(255, 215, 0, 0.5); }
         .intersection.highlight::after { 
             content: ''; width: 14px; height: 14px; 
-            background-color: rgba(0, 180, 0, 0.7); border-radius: 50%; 
+            background-color: rgba(0, 180, 0, 0.6); border-radius: 50%; 
             position: absolute; z-index: 15; 
         }
 
@@ -121,19 +124,17 @@
             flex-direction: column; color: white;
         }
         #game-over-box { background: white; padding: 25px; border-radius: 12px; text-align: center; color: #333; max-width: 300px; width: 80%; }
-        #game-over-title { font-size: 1.5rem; font-weight: bold; margin-bottom: 15px; color: #0066cc; }
+        #game-over-title { font-size: 1.6rem; font-weight: bold; margin-bottom: 15px; color: #0066cc; }
     </style>
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2352376757469824"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 
     <h1>Chess Multiplayer Online</h1>
     
     <div id="connection-panel">
-        <div id="status">[Local Sandbox] Enter a room number to play online</div>
+        <div id="status">【單機試玩】輸入房號即可連線</div>
         <div>
-            <input type="number" id="room-input" placeholder="Room ID (e.g. 8899)" style="width: 150px; text-align: center;">
+            <input type="number" id="room-input" placeholder="room number (e.g., 8899)" style="width: 140px; text-align: center;">
             <button onclick="joinRoom('W')">Play as White</button>
             <button onclick="joinRoom('B')" style="background:#333;">Play as Black</button>
         </div>
@@ -147,7 +148,7 @@
     <div id="game-over-modal">
         <div id="game-over-box">
             <div id="game-over-title">White Wins!</div>
-            <button onclick="restartGame()" style="padding: 8px 20px; font-size: 1rem; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Rematch</button>
+            <button onclick="restartGame()" style="padding: 8px 20px; font-size: 1rem; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer;">Play Again</button>
         </div>
     </div>
 
@@ -214,17 +215,17 @@
             if (audioCtx.state === 'suspended') audioCtx.resume();
             
             const room = document.getElementById('room-input').value.trim();
-            if(!room) return alert("Please enter a room number!");
+            if(!room) return alert("Please enter room ID!");
             roomNumber = room;
             mySide = side;
 
-            statusDiv.innerText = "Connecting to cloud server...";
+            statusDiv.innerText = "Connecting to server...";
             const clientId = "chess_" + Math.random().toString(36).substring(7);
             
             client = new Paho.MQTT.Client("broker.hivemq.com", Number(8884), clientId);
 
             client.onConnectionLost = () => { 
-                statusDiv.innerText = "Connection lost. Please try again."; 
+                statusDiv.innerText = "Connection lost! Please refresh."; 
             };
 
             client.onMessageArrived = (message) => {
@@ -238,9 +239,7 @@
                     selectedIndex = null;
                     validMoves = [];
                     renderBoard();
-                    
                     playBeepSound(); 
-                    
                     if (!gameActive) showGameOver(data.winner);
                 } else if (data.type === 'RESET') {
                     board = JSON.parse(JSON.stringify(initialBoard));
@@ -257,12 +256,12 @@
                 onSuccess: () => {
                     client.subscribe("chess/room/" + roomNumber);
                     document.getElementById('connection-panel').style.background = "#e6ffe6";
-                    statusDiv.innerText = `Joined Room: ${roomNumber} | Side: ${mySide === 'W' ? 'White' : 'Black'}`;
+                    statusDiv.innerText = `Joined Room【${roomNumber}】| Your Side: ${mySide === 'W' ? 'White' : 'Black'}`;
                     renderBoard();
                     sendMoveData(null); 
                 },
                 onFailure: () => {
-                    statusDiv.innerText = "Connection failed. Please refresh and try again.";
+                    statusDiv.innerText = "Connection failed. Try again.";
                 },
                 useSSL: true 
             });
@@ -398,6 +397,7 @@
             return moves;
         }
 
+        // 🌟 正確生成 8x8 格線底色
         function renderBoardLines() {
             linesGrid.innerHTML = '';
             const isBlackView = (mySide === 'B');
@@ -415,6 +415,7 @@
             }
         }
 
+        // 🌟 渲染 8x8 棋子
         function renderBoard() {
             renderBoardLines();
             piecesLayer.innerHTML = '';
@@ -452,9 +453,9 @@
             let turnTxt = turn === 'W' ? "White" : "Black";
             if (mySide !== 'BOTH') {
                 const roleTxt = mySide === 'W' ? "Your Side: White (Bottom)" : "Your Side: Black (Bottom)";
-                statusDiv.innerText = `${roleTxt} | Turn: ${turnTxt} ${turn === mySide ? '(Your Turn!)' : '(Waiting for opponent...)'}`;
+                statusDiv.innerText = `${roleTxt} | Turn: ${turnTxt} ${turn === mySide ? '(Your Turn!)' : '(Waiting...)'}`;
             } else {
-                statusDiv.innerText = `[Local] Turn: ${turnTxt}`;
+                statusDiv.innerText = `【Local】Turn: ${turnTxt}`;
             }
         }
 
@@ -485,7 +486,6 @@
                     if (mySide !== 'BOTH') {
                         sendMoveData(winner); 
                     }
-                    
                     if (!gameActive) {
                         showGameOver(winner);
                     }
