@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <title>Play Chess Online | Real-time Multiplayer Chess Web App (雙人線上國際象棋)</title>
+    <meta name="description" content="Play chess online instantly in your browser. Features real-time remote matchmaking via MQTT, synchronized move/capture sound effects, legal move highlighting, and a responsive chessboard design. No download required—perfect for casual gaming, tactical analysis, and challenging players worldwide.">
+    <meta name="keywords" content="Chess Online, Play Chess, Multiplayer Chess, Web Chess, Real-time Chess App, Western Chess, 國際象棋, 線上西洋棋">
+    
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Play Chess Online - Instant Real-time Multiplayer Chess">
+    <meta property="og:description" content="No download required! Enjoy smooth matches with global players, featuring legal move hints and responsive sound effects directly in your browser.">
+    <meta property="og:image" content="images/chess-preview.png"> <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Play Chess Online - Real-time Multiplayer Web App">
+    <meta name="twitter:description" content="Experience instant browser-based chess with real-time matchmaking, move hints, and synchronized audio.">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: "Microsoft JhengHei", sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            background-color: #f0f0f0; 
+            width: 100vw;
+            height: 100vh;
+            padding: 8px;
+            overflow: hidden;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        h1 { font-size: 1.2rem; color: #333; margin-bottom: 5px; }
+        
+        #connection-panel { 
+            background: #fff; 
+            padding: 8px 12px; 
+            border-radius: 8px; 
+            margin-bottom: 8px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+            text-align: center; 
+            width: 100%;
+            max-width: 400px;
+        }
+        #status { font-size: 0.9rem; margin-bottom: 6px; font-weight: bold; color: #cc0000; }
+        input, button { padding: 6px 10px; font-size: 0.85rem; border-radius: 4px; border: 1px solid #ccc; margin: 2px; }
+        button { background: #0066cc; color: white; cursor: pointer; border: none; font-weight: bold; }
+        
+        /* 棋盤大容器 */
+        .chessboard-container { 
+            position: relative; 
+            border: 4px solid #333; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); 
+            border-radius: 4px;
+            width: 96vw; 
+            max-width: 400px;
+            height: 96vw; 
+            max-height: 400px;
+        }
+
+        /* 8x8 格線黑白網格 */
+        .board-lines { 
+            display: grid; 
+            grid-template-columns: repeat(8, 1fr); 
+            grid-template-rows: repeat(8, 1fr); 
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0; left: 0;
+            pointer-events: none;
+        }
+        .cell { width: 100%; height: 100%; }
+        /* 國際象棋經典淺深格色 */
+        .cell.light { background-color: #eeeed2; }
+        .cell.dark { background-color: #769656; }
+        
+        /* 棋子與點擊事件圖層 */
+        .pieces-layer { 
+            position: absolute; 
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: grid; 
+            grid-template-columns: repeat(8, 1fr); 
+            grid-template-rows: repeat(8, 1fr); 
+            z-index: 10;
+        }
+        
+        .intersection { 
+            width: 100%; height: 100%; 
+            display: flex; justify-content: center; align-items: center; 
+            cursor: pointer; position: relative; 
+        }
+        
+        /* 棋子外觀：使用精美的 Unicode 國際象棋符號 */
+        .piece { 
+            font-size: 2.2rem; 
+            display: flex; justify-content: center; align-items: center; 
+            z-index: 20; 
+            pointer-events: none;
+            transition: transform 0.1s;
+        }
+        /* 白色棋子加深點陰影方便辨識 */
+        .piece.white { color: #ffffff; filter: drop-shadow(1px 1px 2px #000); }
+        .piece.black { color: #000000; filter: drop-shadow(0px 0px 1px #fff); }
+        
+        .intersection.selected { background-color: rgba(255, 215, 0, 0.5); }
+        .intersection.highlight::after { 
+            content: ''; width: 14px; height: 14px; 
+            background-color: rgba(0, 180, 0, 0.7); border-radius: 50%; 
+            position: absolute; z-index: 15; 
+        }
+
+        /* 彈出勝負視窗 */
+        #game-over-modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.7); z-index: 999; justify-content: center; align-items: center;
+            flex-direction: column; color: white;
+        }
+        #game-over-box { background: white; padding: 25px; border-radius: 12px; text-align: center; color: #333; max-width: 300px; width: 80%; }
+        #game-over-title { font-size: 1.6rem; font-weight: bold; margin-bottom: 15px; color: #0066cc; }
+    </style>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2352376757469824"
+     crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <h1>國際象棋連線版</h1>
+    
+    <div id="connection-panel">
+        <div id="status">【單機試玩】輸入自訂房號即可連線</div>
+        <div>
+            <input type="number" id="room-input" placeholder="輸入自訂房號 (如 8899)" style="width: 160px; text-align: center;">
+            <button onclick="joinRoom('W')">執白入房</button>
+            <button onclick="joinRoom('B')" style="background:#333;">執黑入房</button>
+        </div>
+    </div>
+
+    <div class="chessboard-container">
+        <div class="board-lines" id="lines-grid"></div>
+        <div class="pieces-layer" id="pieces-layer"></div>
+    </div>
+
+    <div id="game-over-modal">
+        <div id="game-over-box">
+            <div id="game-over-title">白方大獲全勝！</div>
+            <button onclick="restartGame()" style="padding: 8px 20px; font-size: 1rem; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer;">重新棋局</button>
+        </div>
+    </div>
+
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // 雙方落子「嘟」一聲
+        function playBeepSound() {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(650, audioCtx.currentTime); 
+            gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.08); 
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.08);
+        }
+
+        // 大獲全勝和弦音效
+        function playVictorySound() {
+            const notes = [523.25, 659.25, 783.99, 1046.50]; 
+            notes.forEach((freq, index) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime + index * 0.08);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime + index * 0.08);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5 + index * 0.08);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(audioCtx.currentTime + index * 0.08);
+                osc.stop(audioCtx.currentTime + 0.5 + index * 0.08);
+            });
+        }
+
+        // Unicode 國際象棋棋子對應表
+        const unicodePieces = {
+            'BR': '♜', 'BN': '♞', 'BB': '♝', 'BQ': '♛', 'BK': '♚', 'BP': '♟',
+            'WR': '♖', 'WN': '♘', 'WB': '♗', 'WQ': '♕', 'WK': '♔', 'WP': '♙'
+        };
+
+        // 國際象棋初始標準棋盤佈局 (8x8)
+        const initialBoard = [
+            ['BR', 'BN', 'BB', 'BQ', 'BK', 'BB', 'BN', 'BR'],
+            ['BP', 'BP', 'BP', 'BP', 'BP', 'BP', 'BP', 'BP'],
+            [ null,  null,  null,  null,  null,  null,  null,  null],
+            [ null,  null,  null,  null,  null,  null,  null,  null],
+            [ null,  null,  null,  null,  null,  null,  null,  null],
+            [ null,  null,  null,  null,  null,  null,  null,  null],
+            ['WP', 'WP', 'WP', 'WP', 'WP', 'WP', 'WP', 'WP'],
+            ['WR', 'WN', 'WB', 'WQ', 'WK', 'WB', 'WN', 'WR']
+        ];
+
+        let board = JSON.parse(JSON.stringify(initialBoard));
+        let turn = 'W'; // 白方先動
+        let selectedIndex = null;
+        let validMoves = []; 
+        let gameActive = true;
+
+        let client = null;
+        let roomNumber = "";
+        let mySide = 'BOTH'; 
+
+        const piecesLayer = document.getElementById('pieces-layer');
+        const linesGrid = document.getElementById('lines-grid');
+        const statusDiv = document.getElementById('status');
+
+        function joinRoom(side) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const room = document.getElementById('room-input').value.trim();
+            if(!room) return alert("請輸入房號！");
+            roomNumber = room;
+            mySide = side;
+
+            statusDiv.innerText = "正在連線到雲端伺服器...";
+            const clientId = "chess_" + Math.random().toString(36).substring(7);
+            
+            // 使用加密安全連線網口 8884
+            client = new Paho.MQTT.Client("broker.hivemq.com", Number(8884), clientId);
+
+            client.onConnectionLost = () => { 
+                statusDiv.innerText = "連線中斷，請重試！"; 
+            };
+
+            client.onMessageArrived = (message) => {
+                const data = JSON.parse(message.payloadString);
+                if (data.sender === clientId) return; 
+                
+                if (data.type === 'MOVE') {
+                    board = data.board;
+                    turn = data.turn;
+                    gameActive = data.gameActive;
+                    selectedIndex = null;
+                    validMoves = [];
+                    renderBoard();
+                    
+                    playBeepSound(); 
+                    
+                    if (!gameActive) showGameOver(data.winner);
+                } else if (data.type === 'RESET') {
+                    board = JSON.parse(JSON.stringify(initialBoard));
+                    turn = 'W';
+                    gameActive = true;
+                    selectedIndex = null;
+                    validMoves = [];
+                    document.getElementById('game-over-modal').style.display = 'none';
+                    renderBoard();
+                }
+            };
+
+            client.connect({
+                onSuccess: () => {
+                    client.subscribe("chess/room/" + roomNumber);
+                    document.getElementById('connection-panel').style.background = "#e6ffe6";
+                    statusDiv.innerText = `已入房間【${roomNumber}】| 你執【${mySide === 'W' ? '白棋' : '黑棋'}】`;
+                    renderBoard();
+                    sendMoveData(null); 
+                },
+                onFailure: () => {
+                    statusDiv.innerText = "連線失敗，請重新整理網頁再試！";
+                },
+                useSSL: true 
+            });
+        }
+
+        function sendMoveData(finalWinner) {
+            if (client && client.isConnected()) {
+                const payload = JSON.stringify({
+                    type: 'MOVE',
+                    board: board,
+                    turn: turn,
+                    gameActive: gameActive,
+                    winner: finalWinner, 
+                    sender: client.clientId
+                });
+                const message = new Paho.MQTT.Message(payload);
+                message.destinationName = "chess/room/" + roomNumber;
+                client.send(message);
+            }
+        }
+
+        function sendResetSignal() {
+            if (client && client.isConnected()) {
+                const message = new Paho.MQTT.Message(JSON.stringify({ type: 'RESET' }));
+                message.destinationName = "chess/room/" + roomNumber;
+                client.send(message);
+            }
+        }
+
+        // 簡單精準判定勝負：看國王（King）是否存在
+        function checkGameOver() {
+            let hasWhiteKing = false;
+            let hasBlackKing = false;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (board[r][c] === 'WK') hasWhiteKing = true;
+                    if (board[r][c] === 'BK') hasBlackKing = true;
+                }
+            }
+            if (!hasWhiteKing) return 'B'; // 白王駕崩 = 黑棋勝
+            if (!hasBlackKing) return 'W'; // 黑王駕崩 = 白棋勝
+            return null;
+        }
+
+        function showGameOver(winner) {
+            gameActive = false;
+            playVictorySound();
+            const title = document.getElementById('game-over-title');
+            title.innerText = winner === 'W' ? "白方大獲全勝！" : "黑方大獲全勝！";
+            title.style.color = winner === 'W' ? "#0066cc" : "#000";
+            document.getElementById('game-over-modal').style.display = 'flex';
+        }
+
+        function restartGame() {
+            if (mySide !== 'BOTH') {
+                sendResetSignal();
+            } else {
+                board = JSON.parse(JSON.stringify(initialBoard));
+                turn = 'W';
+                gameActive = true;
+                selectedIndex = null;
+                validMoves = [];
+                document.getElementById('game-over-modal').style.display = 'none';
+                renderBoard();
+            }
+        }
+
+        // 基礎國際象棋移動規則驗證（簡單直觀版）
+        function isValidMove(fromR, fromC, toR, toC) {
+            const piece = board[fromR][fromC];
+            if (!piece) return false;
+            const color = piece[0];
+            const type = piece[1];
+            const target = board[toR][toC];
+            if (target && target[0] === color) return false; // 不能食自己棋
+
+            const dr = toR - fromR;
+            const dc = toC - fromC;
+            const absDr = Math.abs(dr);
+            const absDc = Math.abs(dc);
+
+            // 計算直線或斜線上中間有沒有卡棋子
+            function isPathClear(fR, fC, tR, tC) {
+                let stepR = tR === fR ? 0 : (tR > fR ? 1 : -1);
+                let stepC = tC === fC ? 0 : (tC > fC ? 1 : -1);
+                let currR = fR + stepR;
+                let currC = fC + stepC;
+                while (currR !== tR || currC !== tC) {
+                    if (board[currR][currC]) return false;
+                    currR += stepR;
+                    currC += stepC;
+                }
+                return true;
+            }
+
+            switch (type) {
+                case 'P': // 兵 (Pawn)
+                    if (color === 'W') {
+                        if (dc === 0 && !target) {
+                            if (dr === -1) return true;
+                            if (fromR === 6 && dr === -2) return !board[5][fromC]; // 初始行兩格
+                        }
+                        if (dr === -1 && absDc === 1 && target) return true; // 斜食
+                    } else {
+                        if (dc === 0 && !target) {
+                            if (dr === 1) return true;
+                            if (fromR === 1 && dr === 2) return !board[2][fromC];
+                        }
+                        if (dr === 1 && absDc === 1 && target) return true;
+                    }
+                    return false;
+                case 'R': // 車 (Rook)
+                    if (fromR !== toR && fromC !== toC) return false;
+                    return isPathClear(fromR, fromC, toR, toC);
+                case 'N': // 馬 (Knight)
+                    return (absDr === 2 && absDc === 1) || (absDr === 1 && absDc === 2);
+                case 'B': // 象 (Bishop)
+                    if (absDr !== absDc) return false;
+                    return isPathClear(fromR, fromC, toR, toC);
+                case 'Q': // 👑 女王 (Queen)
+                    if (fromR !== toR && fromC !== toC && absDr !== absDc) return false;
+                    return isPathClear(fromR, fromC, toR, toC);
+                case 'K': // ♚ 國王 (King)
+                    return absDr <= 1 && absDc <= 1;
+            }
+            return false;
+        }
+
+        function getValidMoves(r, c) {
+            let moves = [];
+            for (let toR = 0; toR < 8; toR++) {
+                for (let toC = 0; toC < 8; toC++) {
+                    if (isValidMove(r, c, toR, toC)) moves.push({ row: toR, col: toC });
+                }
+            }
+            return moves;
+        }
+
+        // 生成 8x8 黑白棋盤底色格線
+        function renderBoardLines() {
+            linesGrid.innerHTML = '';
+            const isBlackView = (mySide === 'B');
+            
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const r = isBlackView ? (7 - i) : i;
+                    const c = isBlackView ? (7 - j) : j;
+                    
+                    const cell = document.createElement('div');
+                    // 根據棋盤行列奇偶數交替黑白格色
+                    const isDark = (r + c) % 2 === 1;
+                    cell.className = `cell ${isDark ? 'dark' : 'light'}`;
+                    linesGrid.appendChild(cell);
+                }
+            }
+        }
+
+        // 渲染棋子層與點擊控制
+        function renderBoard() {
+            renderBoardLines();
+            piecesLayer.innerHTML = '';
+            const isBlackView = (mySide === 'B');
+
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const r = isBlackView ? (7 - i) : i;
+                    const c = isBlackView ? (7 - j) : j;
+
+                    const intersection = document.createElement('div');
+                    intersection.className = 'intersection';
+                    
+                    const pieceText = board[r][c];
+                    if (pieceText) {
+                        const pieceDiv = document.createElement('div');
+                        const isWhite = pieceText.startsWith('W');
+                        pieceDiv.className = `piece ${isWhite ? 'white' : 'black'}`;
+                        pieceDiv.innerText = unicodePieces[pieceText];
+                        intersection.appendChild(pieceDiv);
+                    }
+
+                    if (selectedIndex && selectedIndex.row === r && selectedIndex.col === c) {
+                        intersection.classList.add('selected');
+                    }
+
+                    const isPossibleMove = validMoves.some(m => m.row === r && m.col === c);
+                    if (isPossibleMove) intersection.classList.add('highlight');
+
+                    intersection.addEventListener('click', () => handleCellClick(r, c));
+                    piecesLayer.appendChild(intersection);
+                }
+            }
+            
+            let turnTxt = turn === 'W' ? "白方" : "黑方";
+            if (mySide !== 'BOTH') {
+                const roleTxt = mySide === 'W' ? "你執白棋(下)" : "你執黑棋(下)";
+                statusDiv.innerText = `${roleTxt} | 輪到：${turnTxt} ${turn === mySide ? '（到你行！）' : '（等緊對方...）'}`;
+            } else {
+                statusDiv.innerText = `【單機】輪到：${turnTxt}`;
+            }
+        }
+
+        function handleCellClick(row, col) {
+            if (!gameActive) return;
+            if (mySide !== 'BOTH' && turn !== mySide) return; 
+            const piece = board[row][col];
+
+            if (selectedIndex) {
+                const isLegal = validMoves.some(m => m.row === row && m.col === col);
+                if (isLegal) {
+                    board[row][col] = board[selectedIndex.row][selectedIndex.col];
+                    board[selectedIndex.row][selectedIndex.col] = null;
+                    
+                    playBeepSound(); 
+
+                    // 檢查王是否被食
+                    const winner = checkGameOver();
+                    if (winner) {
+                        gameActive = false;
+                    } else {
+                        turn = turn === 'W' ? 'B' : 'W';
+                    }
+
+                    selectedIndex = null;
+                    validMoves = [];
+                    renderBoard();
+                    
+                    if (mySide !== 'BOTH') {
+                        sendMoveData(winner); 
+                    }
+                    
+                    if (!gameActive) {
+                        showGameOver(winner);
+                    }
+                } else if (piece && piece.startsWith(turn)) {
+                    selectedIndex = { row, col };
+                    validMoves = getValidMoves(row, col);
+                    renderBoard();
+                } else {
+                    selectedIndex = null;
+                    validMoves = [];
+                    renderBoard();
+                }
+            } else {
+                if (piece && piece.startsWith(turn)) {
+                    selectedIndex = { row, col };
+                    validMoves = getValidMoves(row, col);
+                    renderBoard();
+                }
+            }
+        }
+
+        renderBoard();
+    </script>
+</body>
+</html>
