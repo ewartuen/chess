@@ -11,7 +11,8 @@
     <meta property="og:type" content="website">
     <meta property="og:title" content="Play Chess Online - Instant Real-time Multiplayer Chess">
     <meta property="og:description" content="No download required! Enjoy smooth matches with global players, featuring legal move hints and responsive sound effects directly in your browser.">
-    <meta property="og:image" content="images/chess-preview.png"> <meta name="twitter:card" content="summary_large_image">
+    <meta property="og:image" content="images/chess-preview.png"> 
+    <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Play Chess Online - Real-time Multiplayer Web App">
     <meta name="twitter:description" content="Experience instant browser-based chess with real-time matchmaking, move hints, and synchronized audio.">
 
@@ -19,7 +20,7 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { 
-            font-family: "Microsoft JhengHei", sans-serif; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             display: flex; 
             flex-direction: column; 
             align-items: center; 
@@ -32,21 +33,22 @@
             user-select: none;
         }
 
-        h1 { font-size: 1.2rem; color: #333; margin-bottom: 5px; }
+        h1 { font-size: 1.4rem; color: #333; margin-bottom: 8px; font-weight: 700; letter-spacing: -0.5px; }
         
         #connection-panel { 
             background: #fff; 
-            padding: 8px 12px; 
+            padding: 10px 14px; 
             border-radius: 8px; 
-            margin-bottom: 8px; 
+            margin-bottom: 12px; 
             box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
             text-align: center; 
             width: 100%;
             max-width: 400px;
         }
-        #status { font-size: 0.9rem; margin-bottom: 6px; font-weight: bold; color: #cc0000; }
-        input, button { padding: 6px 10px; font-size: 0.85rem; border-radius: 4px; border: 1px solid #ccc; margin: 2px; }
-        button { background: #0066cc; color: white; cursor: pointer; border: none; font-weight: bold; }
+        #status { font-size: 0.9rem; margin-bottom: 8px; font-weight: bold; color: #cc0000; line-height: 1.3; }
+        input, button { padding: 6px 12px; font-size: 0.85rem; border-radius: 4px; border: 1px solid #ccc; margin: 2px; }
+        button { background: #0066cc; color: white; cursor: pointer; border: none; font-weight: bold; transition: background 0.2s; }
+        button:hover { background: #0052a3; }
         
         /* 棋盤大容器 */
         .chessboard-container { 
@@ -119,21 +121,21 @@
             flex-direction: column; color: white;
         }
         #game-over-box { background: white; padding: 25px; border-radius: 12px; text-align: center; color: #333; max-width: 300px; width: 80%; }
-        #game-over-title { font-size: 1.6rem; font-weight: bold; margin-bottom: 15px; color: #0066cc; }
+        #game-over-title { font-size: 1.5rem; font-weight: bold; margin-bottom: 15px; color: #0066cc; }
     </style>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2352376757469824"
      crossorigin="anonymous"></script>
 </head>
 <body>
 
-    <h1>國際象棋連線版</h1>
+    <h1>Chess Multiplayer Online</h1>
     
     <div id="connection-panel">
-        <div id="status">【單機試玩】輸入自訂房號即可連線</div>
+        <div id="status">[Local Sandbox] Enter a room number to play online</div>
         <div>
-            <input type="number" id="room-input" placeholder="輸入自訂房號 (如 8899)" style="width: 160px; text-align: center;">
-            <button onclick="joinRoom('W')">執白入房</button>
-            <button onclick="joinRoom('B')" style="background:#333;">執黑入房</button>
+            <input type="number" id="room-input" placeholder="Room ID (e.g. 8899)" style="width: 150px; text-align: center;">
+            <button onclick="joinRoom('W')">Play as White</button>
+            <button onclick="joinRoom('B')" style="background:#333;">Play as Black</button>
         </div>
     </div>
 
@@ -144,15 +146,14 @@
 
     <div id="game-over-modal">
         <div id="game-over-box">
-            <div id="game-over-title">白方大獲全勝！</div>
-            <button onclick="restartGame()" style="padding: 8px 20px; font-size: 1rem; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer;">重新棋局</button>
+            <div id="game-over-title">White Wins!</div>
+            <button onclick="restartGame()" style="padding: 8px 20px; font-size: 1rem; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Rematch</button>
         </div>
     </div>
 
     <script>
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
-        // 雙方落子「嘟」一聲
         function playBeepSound() {
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
@@ -164,7 +165,6 @@
             osc.start(); osc.stop(audioCtx.currentTime + 0.08);
         }
 
-        // 大獲全勝和弦音效
         function playVictorySound() {
             const notes = [523.25, 659.25, 783.99, 1046.50]; 
             notes.forEach((freq, index) => {
@@ -180,13 +180,11 @@
             });
         }
 
-        // Unicode 國際象棋棋子對應表
         const unicodePieces = {
             'BR': '♜', 'BN': '♞', 'BB': '♝', 'BQ': '♛', 'BK': '♚', 'BP': '♟',
             'WR': '♖', 'WN': '♘', 'WB': '♗', 'WQ': '♕', 'WK': '♔', 'WP': '♙'
         };
 
-        // 國際象棋初始標準棋盤佈局 (8x8)
         const initialBoard = [
             ['BR', 'BN', 'BB', 'BQ', 'BK', 'BB', 'BN', 'BR'],
             ['BP', 'BP', 'BP', 'BP', 'BP', 'BP', 'BP', 'BP'],
@@ -199,7 +197,7 @@
         ];
 
         let board = JSON.parse(JSON.stringify(initialBoard));
-        let turn = 'W'; // 白方先動
+        let turn = 'W'; 
         let selectedIndex = null;
         let validMoves = []; 
         let gameActive = true;
@@ -216,18 +214,17 @@
             if (audioCtx.state === 'suspended') audioCtx.resume();
             
             const room = document.getElementById('room-input').value.trim();
-            if(!room) return alert("請輸入房號！");
+            if(!room) return alert("Please enter a room number!");
             roomNumber = room;
             mySide = side;
 
-            statusDiv.innerText = "正在連線到雲端伺服器...";
+            statusDiv.innerText = "Connecting to cloud server...";
             const clientId = "chess_" + Math.random().toString(36).substring(7);
             
-            // 使用加密安全連線網口 8884
             client = new Paho.MQTT.Client("broker.hivemq.com", Number(8884), clientId);
 
             client.onConnectionLost = () => { 
-                statusDiv.innerText = "連線中斷，請重試！"; 
+                statusDiv.innerText = "Connection lost. Please try again."; 
             };
 
             client.onMessageArrived = (message) => {
@@ -260,12 +257,12 @@
                 onSuccess: () => {
                     client.subscribe("chess/room/" + roomNumber);
                     document.getElementById('connection-panel').style.background = "#e6ffe6";
-                    statusDiv.innerText = `已入房間【${roomNumber}】| 你執【${mySide === 'W' ? '白棋' : '黑棋'}】`;
+                    statusDiv.innerText = `Joined Room: ${roomNumber} | Side: ${mySide === 'W' ? 'White' : 'Black'}`;
                     renderBoard();
                     sendMoveData(null); 
                 },
                 onFailure: () => {
-                    statusDiv.innerText = "連線失敗，請重新整理網頁再試！";
+                    statusDiv.innerText = "Connection failed. Please refresh and try again.";
                 },
                 useSSL: true 
             });
@@ -295,7 +292,6 @@
             }
         }
 
-        // 簡單精準判定勝負：看國王（King）是否存在
         function checkGameOver() {
             let hasWhiteKing = false;
             let hasBlackKing = false;
@@ -305,8 +301,8 @@
                     if (board[r][c] === 'BK') hasBlackKing = true;
                 }
             }
-            if (!hasWhiteKing) return 'B'; // 白王駕崩 = 黑棋勝
-            if (!hasBlackKing) return 'W'; // 黑王駕崩 = 白棋勝
+            if (!hasWhiteKing) return 'B'; 
+            if (!hasBlackKing) return 'W'; 
             return null;
         }
 
@@ -314,7 +310,7 @@
             gameActive = false;
             playVictorySound();
             const title = document.getElementById('game-over-title');
-            title.innerText = winner === 'W' ? "白方大獲全勝！" : "黑方大獲全勝！";
+            title.innerText = winner === 'W' ? "White Wins!" : "Black Wins!";
             title.style.color = winner === 'W' ? "#0066cc" : "#000";
             document.getElementById('game-over-modal').style.display = 'flex';
         }
@@ -333,21 +329,19 @@
             }
         }
 
-        // 基礎國際象棋移動規則驗證（簡單直觀版）
         function isValidMove(fromR, fromC, toR, toC) {
             const piece = board[fromR][fromC];
             if (!piece) return false;
             const color = piece[0];
             const type = piece[1];
             const target = board[toR][toC];
-            if (target && target[0] === color) return false; // 不能食自己棋
+            if (target && target[0] === color) return false; 
 
             const dr = toR - fromR;
             const dc = toC - fromC;
             const absDr = Math.abs(dr);
             const absDc = Math.abs(dc);
 
-            // 計算直線或斜線上中間有沒有卡棋子
             function isPathClear(fR, fC, tR, tC) {
                 let stepR = tR === fR ? 0 : (tR > fR ? 1 : -1);
                 let stepC = tC === fC ? 0 : (tC > fC ? 1 : -1);
@@ -362,13 +356,13 @@
             }
 
             switch (type) {
-                case 'P': // 兵 (Pawn)
+                case 'P': 
                     if (color === 'W') {
                         if (dc === 0 && !target) {
                             if (dr === -1) return true;
-                            if (fromR === 6 && dr === -2) return !board[5][fromC]; // 初始行兩格
+                            if (fromR === 6 && dr === -2) return !board[5][fromC]; 
                         }
-                        if (dr === -1 && absDc === 1 && target) return true; // 斜食
+                        if (dr === -1 && absDc === 1 && target) return true; 
                     } else {
                         if (dc === 0 && !target) {
                             if (dr === 1) return true;
@@ -377,18 +371,18 @@
                         if (dr === 1 && absDc === 1 && target) return true;
                     }
                     return false;
-                case 'R': // 車 (Rook)
+                case 'R': 
                     if (fromR !== toR && fromC !== toC) return false;
                     return isPathClear(fromR, fromC, toR, toC);
-                case 'N': // 馬 (Knight)
+                case 'N': 
                     return (absDr === 2 && absDc === 1) || (absDr === 1 && absDc === 2);
-                case 'B': // 象 (Bishop)
+                case 'B': 
                     if (absDr !== absDc) return false;
                     return isPathClear(fromR, fromC, toR, toC);
-                case 'Q': // 👑 女王 (Queen)
+                case 'Q': 
                     if (fromR !== toR && fromC !== toC && absDr !== absDc) return false;
                     return isPathClear(fromR, fromC, toR, toC);
-                case 'K': // ♚ 國王 (King)
+                case 'K': 
                     return absDr <= 1 && absDc <= 1;
             }
             return false;
@@ -404,7 +398,6 @@
             return moves;
         }
 
-        // 生成 8x8 黑白棋盤底色格線
         function renderBoardLines() {
             linesGrid.innerHTML = '';
             const isBlackView = (mySide === 'B');
@@ -415,7 +408,6 @@
                     const c = isBlackView ? (7 - j) : j;
                     
                     const cell = document.createElement('div');
-                    // 根據棋盤行列奇偶數交替黑白格色
                     const isDark = (r + c) % 2 === 1;
                     cell.className = `cell ${isDark ? 'dark' : 'light'}`;
                     linesGrid.appendChild(cell);
@@ -423,7 +415,6 @@
             }
         }
 
-        // 渲染棋子層與點擊控制
         function renderBoard() {
             renderBoardLines();
             piecesLayer.innerHTML = '';
@@ -458,12 +449,12 @@
                 }
             }
             
-            let turnTxt = turn === 'W' ? "白方" : "黑方";
+            let turnTxt = turn === 'W' ? "White" : "Black";
             if (mySide !== 'BOTH') {
-                const roleTxt = mySide === 'W' ? "你執白棋(下)" : "你執黑棋(下)";
-                statusDiv.innerText = `${roleTxt} | 輪到：${turnTxt} ${turn === mySide ? '（到你行！）' : '（等緊對方...）'}`;
+                const roleTxt = mySide === 'W' ? "Your Side: White (Bottom)" : "Your Side: Black (Bottom)";
+                statusDiv.innerText = `${roleTxt} | Turn: ${turnTxt} ${turn === mySide ? '(Your Turn!)' : '(Waiting for opponent...)'}`;
             } else {
-                statusDiv.innerText = `【單機】輪到：${turnTxt}`;
+                statusDiv.innerText = `[Local] Turn: ${turnTxt}`;
             }
         }
 
@@ -480,7 +471,6 @@
                     
                     playBeepSound(); 
 
-                    // 檢查王是否被食
                     const winner = checkGameOver();
                     if (winner) {
                         gameActive = false;
