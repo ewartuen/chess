@@ -97,17 +97,17 @@
             cursor: pointer; position: relative; 
         }
         
-        /* 棋子外觀：放大並置中 */
+        /* 🌟 修改：棋子外觀改為圖片，適應大小 */
         .piece { 
-            font-size: 2.3rem; 
-            display: flex; justify-content: center; align-items: center; 
+            width: 85%; 
+            height: 85%; 
+            background-size: contain; 
+            background-position: center; 
+            background-repeat: no-repeat;
             z-index: 20; 
             pointer-events: none;
             user-select: none;
         }
-        /* 白色棋子加深立體陰影 */
-        .piece.white { color: #ffffff; filter: drop-shadow(1px 1px 2px #000) drop-shadow(0px 0px 1px #555); }
-        .piece.black { color: #000000; filter: drop-shadow(1px 1px 1px rgba(255,255,255,0.6)); }
         
         /* 選中格與可行路徑提示 */
         .intersection.selected { background-color: rgba(255, 215, 0, 0.5); }
@@ -182,9 +182,20 @@
             });
         }
 
-        const unicodePieces = {
-            'BR': '♜', 'BN': '♞', 'BB': '♝', 'BQ': '♛', 'BK': '♚', 'BP': '♟',
-            'WR': '♖', 'WN': '♘', 'WB': '♗', 'WQ': '♕', 'WK': '♔', 'WP': '♙'
+        // 🌟 修改：以 SVG 圖片連結取代原本嘅 Unicode 文字
+        const svgPieces = {
+            'WP': 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
+            'WR': 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg',
+            'WN': 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
+            'WB': 'https://upload.wikimedia.org/wikipedia/commons/9/9b/Chess_blt45.svg',
+            'WQ': 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
+            'WK': 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg',
+            'BP': 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
+            'BR': 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
+            'BN': 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
+            'BB': 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
+            'BQ': 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
+            'BK': 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg'
         };
 
         const initialBoard = [
@@ -398,7 +409,6 @@
             return moves;
         }
 
-        // 🌟 正確生成 8x8 格線底色
         function renderBoardLines() {
             linesGrid.innerHTML = '';
             const isBlackView = (mySide === 'B');
@@ -416,7 +426,7 @@
             }
         }
 
-        // 🌟 渲染 8x8 棋子
+        // 🌟 修改：渲染時讀取 SVG 圖片而唔係塞字元入去
         function renderBoard() {
             renderBoardLines();
             piecesLayer.innerHTML = '';
@@ -433,9 +443,9 @@
                     const pieceText = board[r][c];
                     if (pieceText) {
                         const pieceDiv = document.createElement('div');
-                        const isWhite = pieceText.startsWith('W');
-                        pieceDiv.className = `piece ${isWhite ? 'white' : 'black'}`;
-                        pieceDiv.innerText = unicodePieces[pieceText];
+                        pieceDiv.className = 'piece';
+                        // 使用背景圖片載入 SVG
+                        pieceDiv.style.backgroundImage = `url(${svgPieces[pieceText]})`;
                         intersection.appendChild(pieceDiv);
                     }
 
