@@ -14,7 +14,7 @@
     <meta property="og:image" content="images/chess-preview.png"> 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Play Chess Online - Real-time Multiplayer Web App">
-    <meta name="twitter:description" content="Experience instant browser-based chess with real-time matchmaking, move hints, and synchronized audio.">
+    <meta name="twitter:description" content="Experience instant browser-based chess with real-time matchmaking, move hints, and synchronized audio._">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -48,7 +48,6 @@
         input, button { padding: 6px 10px; font-size: 0.85rem; border-radius: 4px; border: 1px solid #ccc; margin: 2px; }
         button { background: #0066cc; color: white; cursor: pointer; border: none; font-weight: bold; }
         
-        /* 🌟 國際象棋大容器：加入 aspect-ratio 確保無論如何都是完美正方形 */
         .chessboard-container { 
             position: relative; 
             border: 4px solid #4a3b2c; 
@@ -71,7 +70,6 @@
             pointer-events: none;
         }
         .cell { width: 100%; height: 100%; }
-        /* 經典深淺木格色 */
         .cell.light { background-color: #eeeed2; }
         .cell.dark { background-color: #769656; }
         
@@ -92,7 +90,6 @@
             cursor: pointer; position: relative; 
         }
         
-        /* 🌟 使用 SVG 圖片完美置中，徹底解決偏離問題 */
         .piece { 
             width: 85%; 
             height: 85%; 
@@ -100,10 +97,9 @@
             z-index: 20; 
             pointer-events: none;
             user-select: none;
-            filter: drop-shadow(0px 3px 4px rgba(0,0,0,0.4)); /* 增加立體感 */
+            filter: drop-shadow(0px 3px 4px rgba(0,0,0,0.4)); 
         }
         
-        /* 選中格與可行路徑提示 */
         .intersection.selected { background-color: rgba(255, 215, 0, 0.5); }
         .intersection.highlight::after { 
             content: ''; width: 14px; height: 14px; 
@@ -111,7 +107,6 @@
             position: absolute; z-index: 15; 
         }
 
-        /* 彈出勝負視窗 */
         #game-over-modal {
             display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: rgba(0,0,0,0.7); z-index: 999; justify-content: center; align-items: center;
@@ -124,7 +119,7 @@
 </head>
 <body>
 
-    <h1>Chess Multiplayer Online</h1>
+    <h1>Chess Multiplayer Online (WebRTC P2P)</h1>
     
     <div id="connection-panel">
         <div id="status">【單機試玩】輸入房號即可連線</div>
@@ -176,7 +171,6 @@
             });
         }
 
-        // 🌟 核心升級：全面改用標準高畫質 SVG 圖片
         const pieceImages = {
             'BR': 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
             'BN': 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
@@ -213,6 +207,15 @@
         let roomNumber = "";
         let mySide = 'BOTH'; 
 
+        // === WebRTC 宣告變數 ===
+        let peerConnection = null;
+        let dataChannel = null;
+        const rtcConfig = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' } // 使用 Google 免費 STUN 伺服器
+            ]
+        };
+
         const piecesLayer = document.getElementById('pieces-layer');
         const linesGrid = document.getElementById('lines-grid');
         const statusDiv = document.getElementById('status');
@@ -225,75 +228,160 @@
             roomNumber = room;
             mySide = side;
 
-            statusDiv.innerText = "Connecting to server...";
+            statusDiv.innerText = "Connecting to signaling server...";
             const clientId = "chess_" + Math.random().toString(36).substring(7);
             
             client = new Paho.MQTT.Client("broker.hivemq.com", Number(8884), clientId);
 
             client.onConnectionLost = () => { 
-                statusDiv.innerText = "Connection lost! Please refresh."; 
+                console.log("Signaling channel disconnected. WebRTC connection remains active.");
             };
 
-            client.onMessageArrived = (message) => {
+            client.onMessageArrived = async (message) => {
                 const data = JSON.parse(message.payloadString);
                 if (data.sender === clientId) return; 
                 
-                if (data.type === 'MOVE') {
-                    board = data.board;
-                    turn = data.turn;
-                    gameActive = data.gameActive;
-                    selectedIndex = null;
-                    validMoves = [];
-                    renderBoard();
-                    playBeepSound(); 
-                    if (!gameActive) showGameOver(data.winner);
-                } else if (data.type === 'RESET') {
-                    board = JSON.parse(JSON.stringify(initialBoard));
-                    turn = 'W';
-                    gameActive = true;
-                    selectedIndex = null;
-                    validMoves = [];
-                    document.getElementById('game-over-modal').style.display = 'none';
-                    renderBoard();
+                // === WebRTC 信令握手處理 ===
+                if (data.type === 'RTC_OFFER' && mySide === 'B') {
+                    await initWebRTC(false);
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
+                    sendSignal({ type: 'RTC_ANSWER', answer: answer });
+                } 
+                else if (data.type === 'RTC_ANSWER' && mySide === 'W') {
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                } 
+                else if (data.type === 'RTC_ICE') {
+                    if (peerConnection) {
+                        try {
+                            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                        } catch(e) {
+                            console.error("Error adding ice candidate", e);
+                        }
+                    }
                 }
             };
 
             client.connect({
                 onSuccess: () => {
                     client.subscribe("chess/room/" + roomNumber);
-                    document.getElementById('connection-panel').style.background = "#e6ffe6";
-                    statusDiv.innerText = `Joined Room【${roomNumber}】| Your Side: ${mySide === 'W' ? 'White' : 'Black'}`;
+                    if (mySide === 'W') {
+                        statusDiv.innerText = `Joined Room【${roomNumber}】| Waiting for Black to join...`;
+                        initWebRTC(true); // 白方主動建立 Offer
+                    } else {
+                        statusDiv.innerText = `Joined Room【${roomNumber}】| Syncing with White...`;
+                        // 黑方進房後，發送一個點名訊號，提示白方可以發送 Offer 
+                        sendSignal({ type: 'BLACK_JOINED' });
+                    }
                     renderBoard();
-                    sendMoveData(null); 
                 },
                 onFailure: () => {
-                    statusDiv.innerText = "Connection failed. Try again.";
+                    statusDiv.innerText = "Signaling failed. Try refreshing.";
                 },
                 useSSL: true 
             });
         }
 
-        function sendMoveData(finalWinner) {
+        // === 新增：WebRTC 連線核心常式 ===
+        async function initWebRTC(isInitiator) {
+            peerConnection = new RTCPeerConnection(rtcConfig);
+
+            // 收集並發送 ICE Candidate
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    sendSignal({ type: 'RTC_ICE', candidate: event.candidate });
+                }
+            };
+
+            // 監聽 P2P 連線狀態
+            peerConnection.onconnectionstatechange = () => {
+                switch(peerConnection.connectionState) {
+                    case 'connected':
+                        statusDiv.innerText = `🎉 P2P 直連成功！執：${mySide === 'W' ? '白棋' : '黑棋'}`;
+                        document.getElementById('connection-panel').style.background = "#e6ffe6";
+                        break;
+                    case 'disconnected':
+                    case 'failed':
+                        statusDiv.innerText = "❌ P2P 連線中斷或失敗。";
+                        document.getElementById('connection-panel').style.background = "#ffe6e6";
+                        break;
+                }
+            };
+
+            if (isInitiator) {
+                // 白方建立數據通道
+                dataChannel = peerConnection.createDataChannel("chessGameChannel");
+                setupDataChannel();
+
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                sendSignal({ type: 'RTC_OFFER', offer: offer });
+            } else {
+                // 黑方監聽數據通道
+                peerConnection.ondatachannel = (event) => {
+                    dataChannel = event.channel;
+                    setupDataChannel();
+                };
+            }
+        }
+
+        function setupDataChannel() {
+            dataChannel.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleIncomingGameData(data);
+            };
+        }
+
+        function sendSignal(payload) {
             if (client && client.isConnected()) {
-                const payload = JSON.stringify({
-                    type: 'MOVE',
-                    board: board,
-                    turn: turn,
-                    gameActive: gameActive,
-                    winner: finalWinner, 
-                    sender: client.clientId
-                });
-                const message = new Paho.MQTT.Message(payload);
+                payload.sender = client.clientId;
+                const message = new Paho.MQTT.Message(JSON.stringify(payload));
                 message.destinationName = "chess/room/" + roomNumber;
                 client.send(message);
             }
         }
 
+        // === 新增：統一處理接收棋局資料 ===
+        function handleIncomingGameData(data) {
+            if (data.type === 'MOVE') {
+                board = data.board;
+                turn = data.turn;
+                gameActive = data.gameActive;
+                selectedIndex = null;
+                validMoves = [];
+                renderBoard();
+                playBeepSound(); 
+                if (!gameActive) showGameOver(data.winner);
+            } else if (data.type === 'RESET') {
+                board = JSON.parse(JSON.stringify(initialBoard));
+                turn = 'W';
+                gameActive = true;
+                selectedIndex = null;
+                validMoves = [];
+                document.getElementById('game-over-modal').style.display = 'none';
+                renderBoard();
+            }
+        }
+
+        // === 改寫：改經 WebRTC DataChannel 發送數據 ===
+        function sendMoveData(finalWinner) {
+            if (dataChannel && dataChannel.readyState === "open") {
+                const payload = JSON.stringify({
+                    type: 'MOVE',
+                    board: board,
+                    turn: turn,
+                    gameActive: gameActive,
+                    winner: finalWinner
+                });
+                dataChannel.send(payload);
+            }
+        }
+
+        // === 改寫：改經 WebRTC DataChannel 發送重置訊號 ===
         function sendResetSignal() {
-            if (client && client.isConnected()) {
-                const message = new Paho.MQTT.Message(JSON.stringify({ type: 'RESET' }));
-                message.destinationName = "chess/room/" + roomNumber;
-                client.send(message);
+            if (dataChannel && dataChannel.readyState === "open") {
+                dataChannel.send(JSON.stringify({ type: 'RESET' }));
             }
         }
 
@@ -323,6 +411,8 @@
         function restartGame() {
             if (mySide !== 'BOTH') {
                 sendResetSignal();
+                // 本地同步重置
+                handleIncomingGameData({ type: 'RESET' });
             } else {
                 board = JSON.parse(JSON.stringify(initialBoard));
                 turn = 'W';
@@ -435,7 +525,6 @@
                     
                     const pieceText = board[r][c];
                     if (pieceText) {
-                        // 🌟 創建 <img> 標籤載入標準 SVG
                         const pieceImg = document.createElement('img');
                         pieceImg.src = pieceImages[pieceText];
                         pieceImg.className = 'piece';
@@ -457,8 +546,11 @@
             
             let turnTxt = turn === 'W' ? "White" : "Black";
             if (mySide !== 'BOTH') {
-                const roleTxt = mySide === 'W' ? "Your Side: White (Bottom)" : "Your Side: Black (Bottom)";
-                statusDiv.innerText = `${roleTxt} | Turn: ${turnTxt} ${turn === mySide ? '(Your Turn!)' : '(Waiting...)'}`;
+                const roleTxt = mySide === 'W' ? "Your Side: White" : "Your Side: Black";
+                
+                // 顯示當前 P2P 連線與回合狀態
+                let p2pStatus = (dataChannel && dataChannel.readyState === "open") ? "🟢 P2P 直連中" : "🟡 連線建立中...";
+                statusDiv.innerText = `【${roomNumber}】${p2pStatus} | Turn: ${turnTxt} ${turn === mySide ? '(Your Turn!)' : '(Waiting...)'}`;
             } else {
                 statusDiv.innerText = `【Local】Turn: ${turnTxt}`;
             }
